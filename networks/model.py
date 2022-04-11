@@ -44,10 +44,10 @@ class MattingModule(nn.Module):
 class ModelBuilder():
     def build_encoder(self, args):
         if args.arch.encoder == 'resnet50_GN_WS':
-            orig_resnet = resnet_GN_WS.__dict__['l_resnet50'](pretrained=True)
+            orig_resnet = resnet_GN_WS.__dict__['l_resnet50'](pretrained=False)
             net_encoder = ResnetDilated(args.arch, orig_resnet, dilate_scale=8)
         elif args.arch.encoder == 'resnet50_BN':
-            orig_resnet = resnet_bn.__dict__['l_resnet50'](pretrained=True)
+            orig_resnet = resnet_bn.__dict__['l_resnet50'](pretrained=False)
             net_encoder = ResnetDilatedBN(args.arch, orig_resnet, dilate_scale=8)
         else:
             raise Exception('Architecture undefined!')

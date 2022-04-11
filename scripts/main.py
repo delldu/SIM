@@ -19,6 +19,9 @@ from networks.model import build_model
 from utils.config import load_config
 from utils.util import *
 from data.util import *
+import pdb
+from PIL import Image
+
 
 
 #########################################################################################
@@ -144,6 +147,7 @@ def load_sim_samples(cfg):
              'texture_smooth', 'water_drop', 'water_spray']
     name2class = {name:idx for idx, name in enumerate(names)}
 
+
     data_dir = cfg.data.test_dir
     merged = sorted(glob.glob("%s/*/merged/*.png" % data_dir))
     trimap = sorted(glob.glob("%s/*/trimap/*.png" % data_dir))
@@ -220,6 +224,7 @@ def preprocess(alpha_path, trimap_path, image_path, stride=8):
 
 def save_prediction(pred, save_path):
     p_a = pred[0,0].data.cpu().numpy() * 255
+    # p_a.shape -- (1440, 1920)
     cv2.imwrite(save_path, p_a)
 
 
@@ -268,6 +273,13 @@ def run(cfg, model, classifier, logger):
             trimap = trimap[:,:,0:oh,0:ow]
             alpha = alpha[:,:,0:oh,0:ow]
 
+            # type(inputs['origin_image']),  inputs['origin_image'].shape
+            # (<class 'numpy.ndarray'>, (1448, 1928, 3))
+
+            # trimap.size() -- [1, 1, 1440, 1920]
+            # torch.Size([1, 1, 1440, 1920])
+            # (Pdb) pred.min(), pred.max() -- 0., 1.
+
             save_prediction(pred, os.path.join(cfg.log.visualize_path, filename))
 
             sad = ((pred - alpha) * (trimap==128).float()).abs().sum() / 1000.
@@ -276,7 +288,7 @@ def run(cfg, model, classifier, logger):
                 if name not in sad_list: 
                     sad_list[name] = []
                 sad_list[name].append(sad.item())
-            msg = 'Test: [{0}/{1}] SAD {sad:.4f}'.format(idx, len(samples), sad=sad)
+            msg = 'Test: {} [{0}/{1}] SAD {sad:.4f}'.format(image_path, idx, len(samples), sad=sad)
             logger.info(msg)
 
             # measure elapsed time

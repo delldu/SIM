@@ -10,11 +10,11 @@ debug = false
 n_channel = 4
 num_classes = 20
 load_size = 320
-resume_checkpoint = "checkpoints/classifier_resnet50_best.pth.tar"
+resume_checkpoint = "models/classifier_resnet50_best.pth.tar"
 
 
 [model]
-resume_checkpoint = "checkpoints/SIM/ckpt_best.pth"
+resume_checkpoint = "models/SIM/ckpt_best.pth"
 
 
 [model.arch]
@@ -26,7 +26,7 @@ aspp_channel = 256
 
 [data]
 workers = 8
-test_dir = "datasets/SIMD"
+test_dir = "datasets/output/"
 
 
 [log]

@@ -2,7 +2,7 @@ import os
 import sys
 import cv2
 import numpy as np
-
+import pdb
 from scipy.ndimage import morphology
 
 
@@ -42,6 +42,7 @@ def composite(bg, fg, alpha):
 
 def read_and_resize(fg_path, alpha_path, max_size=1920, min_size=800):
     fg = cv2.imread(fg_path)
+    print("alpha_path -- ", alpha_path)
     alpha = cv2.imread(alpha_path, 0)
     if max_size > 0 and min_size > 0:
         h, w = alpha.shape[:2]
@@ -62,10 +63,13 @@ def read_and_resize(fg_path, alpha_path, max_size=1920, min_size=800):
 
 
 def read_and_composite(bg_path, fg_path, alpha_path, max_size=1920, min_size=800):
+    if not os.path.exists(bg_path) or not os.path.exists(fg_path) or not os.path.exists(alpha_path):
+        return False
     fg, alpha = read_and_resize(fg_path, alpha_path, max_size, min_size)
+    print(bg_path)
     bg = cv2.imread(bg_path)
     comp, bg = composite(bg, fg, alpha)
-    return alpha, fg, bg, comp
+    return True, alpha, fg, bg, comp
 
 
 def load_test_samples(test_fg_dir, test_bg_dir, filelist, sv_test_fg_dir):
@@ -77,9 +81,13 @@ def load_test_samples(test_fg_dir, test_bg_dir, filelist, sv_test_fg_dir):
             alpha_file = os.path.join(test_fg_dir, name, "alpha", fg_name)
             fg_file = os.path.join(test_fg_dir, name, "fg", fg_name)
             bg_file = os.path.join(test_bg_dir, bg_name)
-            filename = name + "_" + fg_name + "_" + bg_name
-            alpha, fg, bg, comp = read_and_composite(bg_file, fg_file, alpha_file)
+            if not os.path.exists(bg_file) or not os.path.exists(fg_file) or not os.path.exists(alpha_file):
+                continue
 
+            filename = name + "_" + fg_name + "_" + bg_name
+            ok, alpha, fg, bg, comp = read_and_composite(bg_file, fg_file, alpha_file)
+            if not ok:
+                continue
             trimap = gen_trimap(alpha)
             image_dir = os.path.join(sv_test_fg_dir, name, "merged")
             trimap_dir = os.path.join(sv_test_fg_dir, name, "trimap")
@@ -94,8 +102,8 @@ def load_test_samples(test_fg_dir, test_bg_dir, filelist, sv_test_fg_dir):
 
 
 if __name__ == "__main__":
-    test_fg_dir = "PATH/TO/SIMD/ROOT/DIR"
-    test_bg_dir = "PATH/TO/VOC/IMAGE/DIR"
+    test_fg_dir = "../datasets/SIMD/test"
+    test_bg_dir = "../datasets/VOCtrainval_11-May-2012/VOCdevkit/VOC2012/JPEGImages/"
     filelist_test = "SIMD_composition_test_filelist.txt"
-    sv_test_fg_dir = "PATH/TO/SAVE/DIR"
+    sv_test_fg_dir = "../datasets/output"
     load_test_samples(test_fg_dir, test_bg_dir, filelist_test, sv_test_fg_dir)
