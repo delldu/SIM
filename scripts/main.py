@@ -2,27 +2,22 @@ import os
 import cv2
 import time
 import glob
-import random
 import logging
 import argparse
 import numpy as np
 
 import torch
 import torch.nn as nn
-import torch.nn.parallel
 import torch.nn.functional as F
 import networks.resnet as resnet_models
 
-from collections import OrderedDict
 from pprint import pprint
 from networks.model import build_model
 from utils.config import load_config
 from utils.util import *
 from data.util import *
 import pdb
-from PIL import Image
 
-import pdb
 
 #########################################################################################
 #   args
@@ -53,7 +48,7 @@ def build_classifier(args, logger):
 
 
 def build_sim_model(args, logger):
-    model = build_model(args)
+    model = build_model()
 
     # args = {'num_classes': 20, 'pretrain_checkpoint': None, 
     # 'resume_checkpoint': 'models/SIM/ckpt_best.pth', 
