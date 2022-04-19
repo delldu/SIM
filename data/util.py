@@ -2,7 +2,7 @@ import os
 import cv2
 import numpy as np
 import torch
-
+import pdb
 
 def dt(a):
     return cv2.distanceTransform((a * 255).astype(np.uint8), cv2.DIST_L2, 0)
@@ -52,14 +52,16 @@ def trimap_to_2chn(trimap):
 
 
 def trimap_to_clks(trimap, L=320):
+    # trimap.shape -- (1448, 1928, 2)
     h, w = trimap.shape[:2]
     clicks = np.zeros((h, w, 6), dtype=np.float32)
     for k in range(2):
         if (np.count_nonzero(trimap[:, :, k]) > 0):
             dt_mask = -dt(1 - trimap[:, :, k])**2
-            clicks[:, :, 3*k] = np.exp(dt_mask / (2 * ((0.02 * L)**2)))
-            clicks[:, :, 3*k+1] = np.exp(dt_mask / (2 * ((0.08 * L)**2)))
-            clicks[:, :, 3*k+2] = np.exp(dt_mask / (2 * ((0.16 * L)**2)))
+            clicks[:, :, 3*k] = np.exp(dt_mask / (2 * ((0.02 * L)**2)))   #   81.92000000000002
+            clicks[:, :, 3*k+1] = np.exp(dt_mask / (2 * ((0.08 * L)**2))) # 1310.7200000000003
+            clicks[:, :, 3*k+2] = np.exp(dt_mask / (2 * ((0.16 * L)**2))) # 5242.880000000001
+
     return clicks
 
 

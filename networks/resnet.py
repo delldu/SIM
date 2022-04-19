@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from collections import OrderedDict
+import pdb
 
 try:
     from torch.hub import load_state_dict_from_url
@@ -268,6 +269,7 @@ def _resnet(arch, inc, block, layers, pretrained, progress, **kwargs):
             if 'fc' not in k:
                 state_dict_filter[k] = v
         model.load_state_dict(state_dict_filter, strict=False)
+
     return model
 
 
@@ -303,6 +305,10 @@ def resnet50(inc, pretrained=False, progress=True, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
+    # inc = 4
+    # pretrained = False
+    # progress = True
+    # kwargs = {'num_classes': 20}
     return _resnet('resnet50', inc, Bottleneck, [3, 4, 6, 3], pretrained, progress,
                    **kwargs)
 

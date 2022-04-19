@@ -9,12 +9,12 @@ from networks.lap_pyramid_loss import LapLoss
 from networks.spatial_gradient_2d import SpatialGradient
 from networks.util import weight_init, norm, ResnetDilated, ResnetDilatedBN 
 from networks.ppm import PPM, ASPP
-
+import pdb
 
 def build_model(args):
     builder = ModelBuilder()
-    net_encoder = builder.build_encoder(args)
-    net_decoder = builder.build_decoder(args)
+    net_encoder = builder.build_encoder()
+    net_decoder = builder.build_decoder()
     model = MattingModule(args, net_encoder, net_decoder)
     return model
 
@@ -22,13 +22,14 @@ def build_model(args):
 class MattingModule(nn.Module):
     def __init__(self, args, net_enc, net_dec):
         super(MattingModule, self).__init__()
-        self.inc = args.arch.n_channel
+        self.inc = 11 # -- args.arch.n_channel
         self.encoder = net_enc
         self.decoder = net_dec
         self.args = args
+        print("### MattingModule self.inc", self.inc)
 
-    def forward(self, image, two_chan_trimap, image_n, trimap_transformed, smap, inputs=None, is_training=True): 
-
+    def forward(self, image, two_chan_trimap, image_n, trimap_transformed, smap, is_training=True): 
+        # self.inc -- 11
         if self.inc == 5:
             resnet_input = torch.cat((image_n, two_chan_trimap), 1)
         elif self.inc == 11:
@@ -37,23 +38,26 @@ class MattingModule(nn.Module):
             raise NotImplementedError
 
         conv_out, indices = self.encoder(resnet_input, return_feature_maps=True, smap=smap)
-        out = self.decoder(conv_out, image, indices, two_chan_trimap, smap=smap, inputs=inputs, is_training=is_training)
+        out = self.decoder(conv_out, image, indices, two_chan_trimap, smap=smap, is_training=is_training)
         return out
 
 
 class ModelBuilder():
-    def build_encoder(self, args):
-        if args.arch.encoder == 'resnet50_GN_WS':
-            orig_resnet = resnet_GN_WS.__dict__['l_resnet50'](pretrained=False)
-            net_encoder = ResnetDilated(args.arch, orig_resnet, dilate_scale=8)
-        elif args.arch.encoder == 'resnet50_BN':
-            orig_resnet = resnet_bn.__dict__['l_resnet50'](pretrained=False)
-            net_encoder = ResnetDilatedBN(args.arch, orig_resnet, dilate_scale=8)
-        else:
-            raise Exception('Architecture undefined!')
+    def build_encoder(self):
+        # pp args.arch.encoder -- 'resnet50_BN'
+        # if args.arch.encoder == 'resnet50_GN_WS':
+        #     orig_resnet = resnet_GN_WS.__dict__['l_resnet50'](pretrained=False)
+        #     net_encoder = ResnetDilated(args.arch, orig_resnet, dilate_scale=8)
+        # elif args.arch.encoder == 'resnet50_BN':
+        #     orig_resnet = resnet_bn.__dict__['l_resnet50'](pretrained=False)
+        #     net_encoder = ResnetDilatedBN(args.arch, orig_resnet, dilate_scale=8)
+        # else:
+        #     raise Exception('Architecture undefined!')
 
-        num_channels = args.arch.n_channel
+        orig_resnet = resnet_bn.__dict__['l_resnet50'](pretrained=False)
+        net_encoder = ResnetDilatedBN(orig_resnet, dilate_scale=8)
 
+        num_channels = 11 # -- args.arch.n_channel
         if(num_channels > 3):
             print(f'modifying input layer to accept {num_channels} channels')
             net_encoder_sd = net_encoder.state_dict()
@@ -74,21 +78,30 @@ class ModelBuilder():
             net_encoder.load_state_dict(net_encoder_sd)
         return net_encoder
 
-    def build_decoder(self, args):
-        net_decoder = Decoder(args)
+    def build_decoder(self):
+        net_decoder = Decoder()
         return net_decoder
 
 
 class Decoder(nn.Module):
-    def __init__(self, args):
+    # def __init__(self, args):
+    def __init__(self):
         super(Decoder, self).__init__()
 
-        self.args = args.arch
+        # self.args = args.arch
         self.batch_norm = True
         middle_chn = 2048
 
-        self.global_module = ASPP(middle_chn, self.args.atrous_rates, self.args.aspp_channel)
-        en_chn = middle_chn + self.args.aspp_channel
+        #  pp self.args
+        # {'aspp_channel': 256,
+        #  'atrous_rates': [12, 24, 36],
+        #  'encoder': 'resnet50_BN',
+        #  'n_channel': 11,
+        #  'pool_scales': [1, 2, 3, 6],
+        #  'ppm_channel': 256}
+        # self.global_module = ASPP(middle_chn, self.args.atrous_rates, self.args.aspp_channel)
+        self.global_module = ASPP(2048, [12, 24, 36], 256)
+        en_chn = 2048 + 256 # middle_chn + self.args.aspp_channel
 
         self.conv_up1 = nn.Sequential(
             L.Conv2d(en_chn, 256, kernel_size=3, padding=1, bias=True),
@@ -135,11 +148,12 @@ class Decoder(nn.Module):
             nn.Conv2d(16, 3, kernel_size=1, padding=0, bias=False)
         )
 
-    def forward(self, conv_out, img, indices, two_chan_trimap, smap=None, inputs=None, is_training=True):
+    def forward(self, conv_out, img, indices, two_chan_trimap, smap=None, is_training=True):
+        # len(conv_out) -- 6
         conv5 = conv_out[-1]
-
         global_ctx = self.global_module(conv5)
         x = torch.cat([conv5, global_ctx], 1)
+        # smap.size() -- [1, 20, 1448, 1928]
 
         x = self.conv_up1(x)
         x = torch.nn.functional.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)

@@ -22,7 +22,7 @@ from data.util import *
 import pdb
 from PIL import Image
 
-
+import pdb
 
 #########################################################################################
 #   args
@@ -33,8 +33,13 @@ parser.add_argument('-p', '--phase', type=str, metavar='PHASE', help='train or t
 
 
 def build_classifier(args, logger):
+    # args = {'arch': 'resnet50', 'n_channel': 4, 'num_classes': 20, 
+    #     'resume_checkpoint': 'models/classifier_resnet50_best.pth.tar', 
+    #     'load_size': 320}
+
     logger.info("=> creating classifier '{}'".format(args.arch))
     model = resnet_models.__dict__[args.arch](args.n_channel, num_classes=args.num_classes, pretrained=False)
+
     if os.path.isfile(args.resume_checkpoint):
         logger.info("=> loading checkpoint '{}'".format(args.resume_checkpoint))
         checkpoint = torch.load(args.resume_checkpoint, map_location=torch.device('cpu'))
@@ -50,7 +55,20 @@ def build_classifier(args, logger):
 def build_sim_model(args, logger):
     model = build_model(args)
 
+    # args = {'num_classes': 20, 'pretrain_checkpoint': None, 
+    # 'resume_checkpoint': 'models/SIM/ckpt_best.pth', 
+    # 'trimap_channel': 3, 
+    # 'arch': {
+    #     'n_channel': 11, 
+    #     'encoder': 'resnet50_BN', 
+    #     'pool_scales': [1, 2, 3, 6], 
+    #     'ppm_channel': 256, 
+    #     'atrous_rates': [12, 24, 36], 
+    #     'aspp_channel': 256}
+    # }
+
     if args.pretrain_checkpoint and os.path.isfile(args.pretrain_checkpoint):
+        # NOT Reach here !!!
         logger.info("Pretrain: loading '{}'".format(args.pretrain_checkpoint))
         ckpt = torch.load(args.pretrain_checkpoint, map_location=torch.device('cpu'))
         if 'state_dict' in ckpt:
@@ -78,21 +96,20 @@ def build_sim_model(args, logger):
     return model
 
 
-def extract_semantic_trimap(model, image, trimap, thresh=0.3, return_cam=False):
-    model.eval()
+def extract_semantic_trimap(model, image, trimap):
+    # model -- ResNet model
+    # return_cam -- True
+    # model.eval()
+    N, C, H, W = image.shape
     with torch.no_grad():
-        N, C, H, W = image.shape
+        #  torch.cat([image, trimap/255.], dim=1).size() -- torch.Size([1, 4, 320, 320])
         output, cam, feats = model(torch.cat([image, trimap/255.], dim=1))
-        cam = F.interpolate(cam, (H, W), mode='bilinear')
-        if return_cam: return cam, output
-
-        cam_norm = (cam - cam.min()) / (cam.max() - cam.min())
-        semantic_trimap = cam_norm * (trimap==128).float()
-        torch.cuda.empty_cache()
-    return semantic_trimap
+    cam = F.interpolate(cam, (H, W), mode='bilinear')
+    return cam, output
 
 
-def extract_semantic_trimap_whole(args, model, image, trimap, thresh=0.1):
+
+def extract_semantic_trimap_whole(args, model, image, trimap):
     step = args.load_size
     N, C, H, W = image.shape
     cam = torch.zeros((N, args.num_classes, H, W)).to(image.device)
@@ -105,7 +122,7 @@ def extract_semantic_trimap_whole(args, model, image, trimap, thresh=0.1):
                 patcht = trimap[:,:,i:i+step,j:j+step]
                 if (patcht == 128).sum() == 0: continue
                 patchi = image[:,:,i:i+step, j:j+step]
-                patchc, out = extract_semantic_trimap(model, patchi, patcht, return_cam=True)
+                patchc, out = extract_semantic_trimap(model, patchi, patcht)
                 cam[:,:,i:i+step,j:j+step] += patchc
                 weight[:,:,i:i+step,j:j+step] += 1
     cam = cam / torch.clamp_min(weight,1)
@@ -164,6 +181,13 @@ def load_sim_samples(cfg):
         names.append(splits[-3])
         target.append(name2class[splits[-3]])
     print('Found %d samples' % len(alpha))
+    # alpha -- ['datasets/output/defocus/alpha/red-dahlia-flower-60597_2008_000902.png', ...]
+    # trimap -- ['datasets/output/defocus/trimap/red-dahlia-flower-60597_2008_000902.png', ...]
+    # merged -- ['datasets/output/defocus/merged/red-dahlia-flower-60597_2008_000902.png', ...]
+    # names -- ['defocus', 'defocus' ...]
+    # filenames -- ['defocus_red-dahlia-flower-60597_2008_000902.png', ...]
+    # target -- [0, , 0, 1, 3, 6, 7, ..., 19]
+
     return zip(alpha, trimap, merged, names, filenames, target)
 
 
@@ -208,14 +232,15 @@ def preprocess(alpha_path, trimap_path, image_path, stride=8):
     trimap_clks = torch.from_numpy(trimap_clks.transpose((2,0,1)))
 
     inputs = {
-        "alpha": alpha_tensor.unsqueeze(0),
-        "trimap": trimap_tensor.unsqueeze(0),
-        "image_scale": image_scale.unsqueeze(0),
-        "image_trans": image_trans.unsqueeze(0),
-        "trimap_2chn": trimap_2chn.unsqueeze(0), 
-        "trimap_clks": trimap_clks.unsqueeze(0), 
-        "origin_image": image,
-        "origin_alpha": alpha,
+        "alpha": alpha_tensor.unsqueeze(0), # [1, 1, 1448, 1928], [0.0, 1.0]
+        "trimap": trimap_tensor.unsqueeze(0), # [1, 1, 1448, 1928], [0, 255]
+        "image_scale": image_scale.unsqueeze(0), # [1, 3, 1448, 1928], [0.0, 1.0]
+        "image_trans": image_trans.unsqueeze(0), # [1, 3, 1448, 1928], Normal 
+        "trimap_2chn": trimap_2chn.unsqueeze(0), # [1, 2, 1448, 1928], [0 | 1]
+        "trimap_clks": trimap_clks.unsqueeze(0), # [1, 6, 1448, 1928]
+        "origin_image": image, # image.shape -- (1448, 1928, 3)
+        "origin_alpha": alpha, # alpha.shape -- (1448, 1928)
+
         "origin_h": h,
         "origin_w": w
     } 
@@ -238,7 +263,7 @@ def run(cfg, model, classifier, logger):
 
     end = time.time()
 
-    if cfg.task == 'SIM':
+    if cfg.task == 'SIM': # True
         samples = load_sim_samples(cfg)
     elif cfg.task == 'Adobe':
         samples = load_adobe_samples(cfg)
@@ -246,6 +271,7 @@ def run(cfg, model, classifier, logger):
         raise NotImplementedError
 
     samples = list(samples)
+    classifier = classifier.eval()
 
     with torch.no_grad():
         for idx, (alpha_path, trimap_path, image_path, name, filename, target) in enumerate(samples):
@@ -262,6 +288,9 @@ def run(cfg, model, classifier, logger):
             ow = inputs['origin_w']
 
             semantic_trimap = extract_semantic_trimap_whole(cfg.classifier, classifier, image_trans, trimap)
+            # (Pdb) semantic_trimap.size() -- [1, 20, 1448, 1928]
+            # (Pdb) semantic_trimap.min(), semantic_trimap.max() -- 0., 0.9843
+
             out = model(image_scale, trimap_2chn, image_trans, trimap_clks, semantic_trimap, is_training=False)
             out['alpha'] = torch.clamp(out['alpha'], 0, 1)
 
@@ -288,7 +317,8 @@ def run(cfg, model, classifier, logger):
                 if name not in sad_list: 
                     sad_list[name] = []
                 sad_list[name].append(sad.item())
-            msg = 'Test: {} [{0}/{1}] SAD {sad:.4f}'.format(image_path, idx, len(samples), sad=sad)
+
+            msg = 'Test: {} [{}/{}] SAD {sad:.4f}'.format(image_path, idx, len(samples), sad=sad.item())
             logger.info(msg)
 
             # measure elapsed time

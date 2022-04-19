@@ -63,7 +63,7 @@ class SELayer(nn.Module):
 
 
 class ResnetDilatedBN(nn.Module):
-    def __init__(self, args, orig_resnet, dilate_scale=8):
+    def __init__(self, orig_resnet, dilate_scale=8):
         super(ResnetDilatedBN, self).__init__()
         from functools import partial
 
@@ -111,6 +111,7 @@ class ResnetDilatedBN(nn.Module):
                     m.padding = (dilate, dilate)
 
     def forward(self, x, return_feature_maps=False, smap=None):
+        # x.size(), smap.size() -- [1, 11, 1288, 1928], [1, 20, 1288, 1928]
         conv_out = [x]
         x = self.relu1(self.bn1(self.conv1(x)+self.conv1_side(smap)))
         x = self.relu2(self.bn2(self.conv2(x)))
@@ -133,7 +134,7 @@ class ResnetDilatedBN(nn.Module):
 
 
 class ResnetDilated(nn.Module):
-    def __init__(self, args, orig_resnet, dilate_scale=8):
+    def __init__(self, orig_resnet, dilate_scale=8):
         super(ResnetDilated, self).__init__()
         from functools import partial
   
@@ -172,7 +173,7 @@ class ResnetDilated(nn.Module):
                     m.dilation = (dilate, dilate)
                     m.padding = (dilate, dilate)
 
-    def forward(self, x, return_feature_maps=False, smap=None):
+    def forward(self, x, smap=None):
         conv_out = [x]
         x = self.relu(self.bn1(self.conv1(x)+self.conv1_side(smap)))
         conv_out.append(x)
@@ -186,8 +187,6 @@ class ResnetDilated(nn.Module):
         x = self.layer4(x)
         conv_out.append(x)
 
-        if return_feature_maps:
-            return conv_out, indices
         return [x]
 
 
